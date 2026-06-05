@@ -2,6 +2,13 @@
 
 Option A 구현체입니다. 정적 호스팅 도메인에서 이 폴더를 배포하고, GAS `/exec` 웹앱을 iframe으로 띄워 홈화면 아이콘/PWA shell을 제공합니다.
 
+앱 아이콘은 사용자가 제공한 발전소 점검 이미지로 생성합니다.
+
+- `icon-source.png`: 1024×1024 clean master
+- `icon-192.png`: web manifest 192px
+- `icon-512.png`: web manifest 512px / maskable
+- `apple-touch-icon.png`: iOS 홈화면 180px
+
 ## 사용 방법
 
 1. GAS 앱을 배포해서 `/exec` URL을 확보합니다.
