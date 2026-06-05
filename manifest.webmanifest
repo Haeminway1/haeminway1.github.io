@@ -1,0 +1,24 @@
+{
+  "id": "/pwa-wrapper/",
+  "name": "발전소 점검 모바일",
+  "short_name": "발전소점검",
+  "description": "발전소 점검 모바일 GAS 웹앱 PWA 래퍼",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0F2A4A",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

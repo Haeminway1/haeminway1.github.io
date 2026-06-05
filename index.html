@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>발전소 점검 모바일</title>
+  <meta name="theme-color" content="#0F2A4A">
+  <meta name="description" content="발전소 점검 모바일 PWA 래퍼">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <style>
+    :root { color-scheme: light; --navy: #0F2A4A; --accent: #2E72F0; --soft: #EFF6FF; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; min-height: 100%; height: 100%; background: #0B1220; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif; }
+    body { overflow: hidden; }
+    .pwa-shell { position: fixed; inset: 0; display: flex; flex-direction: column; background: #0B1220; }
+    .safe-top { height: env(safe-area-inset-top, 0px); flex: 0 0 auto; background: var(--navy); }
+    .app-frame { flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; border: 0; display: block; background: #fff; }
+    .status-pill { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 10px); left: 50%; transform: translateX(-50%); z-index: 4; max-width: calc(100% - 32px); padding: 8px 12px; border-radius: 999px; background: rgba(15, 42, 74, 0.92); color: #fff; font-size: 12.5px; font-weight: 800; box-shadow: 0 10px 30px rgba(0,0,0,.18); opacity: 0; pointer-events: none; transition: opacity .18s ease; }
+    body[data-gas-frame-state="loading"] .status-pill,
+    body[data-gas-frame-state="setup"] .status-pill,
+    body[data-gas-frame-state="error"] .status-pill { opacity: 1; }
+    .setup-panel { position: fixed; inset: 0; z-index: 5; display: none; align-items: center; justify-content: center; padding: 22px; background: linear-gradient(180deg, #0F2A4A, #07111F); color: #fff; }
+    body[data-gas-frame-state="setup"] .setup-panel,
+    body[data-gas-frame-state="error"] .setup-panel { display: flex; }
+    .setup-card { width: min(100%, 430px); border-radius: 26px; padding: 24px 20px; background: rgba(255,255,255,.11); border: 1px solid rgba(255,255,255,.2); box-shadow: 0 24px 80px rgba(0,0,0,.32); }
+    .setup-card h1 { margin: 0; font-size: 22px; line-height: 1.25; letter-spacing: -0.03em; }
+    .setup-card p { margin: 10px 0 0; color: rgba(255,255,255,.8); font-size: 14px; line-height: 1.55; word-break: keep-all; }
+    .setup-card label { display: block; margin-top: 18px; font-size: 13px; font-weight: 850; color: rgba(255,255,255,.86); }
+    .setup-card input { width: 100%; margin-top: 8px; height: 46px; border: 1px solid rgba(255,255,255,.28); border-radius: 14px; background: rgba(255,255,255,.95); color: #101828; padding: 0 12px; font-size: 14px; }
+    .setup-card button { width: 100%; margin-top: 12px; height: 48px; border: 0; border-radius: 15px; background: #fff; color: var(--navy); font-size: 15px; font-weight: 900; }
+    .setup-error { min-height: 18px; margin-top: 10px; color: #FECACA; font-size: 12.5px; font-weight: 800; overflow-wrap: anywhere; }
+    .setup-hint { margin-top: 13px; padding: 10px 11px; border-radius: 14px; background: rgba(255,255,255,.1); color: rgba(255,255,255,.78); font-size: 12.5px; line-height: 1.45; }
+  </style>
+</head>
+<body data-gas-frame-state="loading">
+  <div class="pwa-shell" data-test-id="pwa-wrapper-shell">
+    <div class="safe-top" aria-hidden="true"></div>
+    <iframe id="appframe" class="app-frame" data-test-id="pwa-gas-frame" title="발전소 점검 앱" allow="clipboard-read; clipboard-write; web-share"></iframe>
+  </div>
+  <div class="status-pill" data-test-id="pwa-wrapper-status">GAS 앱 연결 중…</div>
+  <section class="setup-panel" data-test-id="pwa-wrapper-setup" aria-label="GAS URL 설정">
+    <div class="setup-card">
+      <h1>발전소 점검 PWA 연결</h1>
+      <p>배포된 GAS 웹앱 URL을 입력하면 이 기기에 저장하고 홈화면 앱처럼 실행합니다.</p>
+      <label for="gas-url-input">GAS 웹앱 /exec URL</label>
+      <input id="gas-url-input" data-test-id="pwa-gas-url-input" inputmode="url" autocomplete="url" placeholder="https://script.google.com/macros/s/.../exec">
+      <button id="save-gas-url" data-test-id="pwa-save-gas-url" type="button">URL 저장하고 열기</button>
+      <div class="setup-error" data-test-id="pwa-wrapper-error"></div>
+      <div class="setup-hint">초기 배포 후에는 <code>?gasUrl=배포URL</code>로 열어 자동 저장할 수 있습니다. 저장된 URL은 이 브라우저의 localStorage에만 보관됩니다.</div>
+    </div>
+  </section>
+
+  <script src="./config.js"></script>
+  <script>
+    (function () {
+      var STORAGE_KEY = 'ppi.pwaWrapper.gasUrl.v1';
+      var frame = document.getElementById('appframe');
+      var status = document.querySelector('[data-test-id="pwa-wrapper-status"]');
+      var input = document.getElementById('gas-url-input');
+      var saveButton = document.getElementById('save-gas-url');
+      var errorBox = document.querySelector('[data-test-id="pwa-wrapper-error"]');
+      var params = new URLSearchParams(window.location.search);
+      var config = window.PPI_WRAPPER_CONFIG || {};
+      var handshakeTimer = 0;
+      var handshakeDeadline = 0;
+
+      function setState(state, message) {
+        document.body.dataset.gasFrameState = state;
+        if (status) status.textContent = message || '';
+      }
+
+      function readSavedGasUrl() {
+        try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (_) { return ''; }
+      }
+
+      function saveGasUrl(value) {
+        try { localStorage.setItem(STORAGE_KEY, value); } catch (_) {}
+      }
+
+      function removeWrapperParams(searchParams) {
+        var next = new URLSearchParams(searchParams.toString());
+        ['gasUrl', 'ppiGasUrl'].forEach(function (key) { next.delete(key); });
+        return next;
+      }
+
+      function isLocalWrapper() {
+        return /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+      }
+
+      function isAllowedGasUrl(value) {
+        try {
+          var url = new URL(value, window.location.href);
+          if (url.origin === 'https://script.google.com' && /^\/macros\/s\/[^/]+\/exec\/?$/.test(url.pathname)) return true;
+          if (isLocalWrapper() && (url.protocol === 'http:' || url.protocol === 'https:' || url.protocol === 'file:')) return true;
+        } catch (_) {}
+        return false;
+      }
+
+      function resolveGasUrl() {
+        return params.get('gasUrl') || params.get('ppiGasUrl') || config.gasUrl || readSavedGasUrl() || '';
+      }
+
+      function buildFrameUrl(gasUrl) {
+        var target = new URL(gasUrl, window.location.href);
+        var forwarded = removeWrapperParams(params);
+        forwarded.forEach(function (value, key) {
+          if (!target.searchParams.has(key)) target.searchParams.append(key, value);
+        });
+        return target.toString();
+      }
+
+      function postHandshake() {
+        if (!frame || !frame.contentWindow) return;
+        try {
+          frame.contentWindow.postMessage({
+            type: 'PPI_WRAPPER_READY',
+            app: 'power-plant-inspection',
+            wrapperOrigin: window.location.origin,
+            version: 'option-a-pwa-wrapper-v1'
+          }, '*');
+        } catch (_) {}
+      }
+
+      function startHandshakeLoop() {
+        window.clearInterval(handshakeTimer);
+        handshakeDeadline = Date.now() + 10000;
+        postHandshake();
+        handshakeTimer = window.setInterval(function () {
+          if (Date.now() > handshakeDeadline) {
+            window.clearInterval(handshakeTimer);
+            if (document.body.dataset.gasFrameState !== 'ready') {
+              setState('error', 'GAS 앱 래퍼 확인 실패');
+              if (errorBox) errorBox.textContent = 'GAS 앱에서 이 PWA 도메인을 허용해야 합니다. src/frontend/index.html의 허용 origin을 확인하세요.';
+            }
+            return;
+          }
+          postHandshake();
+        }, 400);
+      }
+
+      function openGasUrl(gasUrl) {
+        if (!isAllowedGasUrl(gasUrl)) {
+          setState('setup', 'GAS URL 설정 필요');
+          if (input) input.value = gasUrl || '';
+          if (errorBox && gasUrl) errorBox.textContent = '유효한 Apps Script /exec URL을 입력하세요.';
+          return;
+        }
+        saveGasUrl(gasUrl);
+        setState('loading', 'GAS 앱 연결 중…');
+        if (errorBox) errorBox.textContent = '';
+        frame.src = buildFrameUrl(gasUrl);
+        startHandshakeLoop();
+      }
+
+      frame.addEventListener('load', function () {
+        startHandshakeLoop();
+      });
+
+      window.addEventListener('message', function (event) {
+        if (event.source !== frame.contentWindow) return;
+        var data = event.data || {};
+        if (data.type !== 'PPI_GAS_FRAME_VERIFIED') return;
+        window.clearInterval(handshakeTimer);
+        setState('ready', '연결 완료');
+      });
+
+      saveButton.addEventListener('click', function () {
+        openGasUrl(input.value.trim());
+      });
+
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') openGasUrl(input.value.trim());
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('./sw.js').catch(function () {});
+        });
+      }
+
+      openGasUrl(resolveGasUrl());
+    })();
+  </script>
+</body>
+</html>
