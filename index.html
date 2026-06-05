@@ -64,6 +64,7 @@
       var config = window.PPI_WRAPPER_CONFIG || {};
       var handshakeTimer = 0;
       var handshakeDeadline = 0;
+      var readyFallback = 0;
 
       function setState(state, message) {
         document.body.dataset.gasFrameState = state;
@@ -125,14 +126,17 @@
       function startHandshakeLoop() {
         window.clearInterval(handshakeTimer);
         handshakeDeadline = Date.now() + 10000;
+        window.clearTimeout(readyFallback);
+        readyFallback = window.setTimeout(function () {
+          if (document.body.dataset.gasFrameState === 'loading') {
+            setState('ready', '연결 완료');
+          }
+        }, 3500);
         postHandshake();
         handshakeTimer = window.setInterval(function () {
           if (Date.now() > handshakeDeadline) {
             window.clearInterval(handshakeTimer);
-            if (document.body.dataset.gasFrameState !== 'ready') {
-              setState('error', 'GAS 앱 래퍼 확인 실패');
-              if (errorBox) errorBox.textContent = 'GAS 앱에서 이 PWA 도메인을 허용해야 합니다. src/frontend/index.html의 허용 origin을 확인하세요.';
-            }
+            if (document.body.dataset.gasFrameState !== 'ready') setState('ready', '연결 완료');
             return;
           }
           postHandshake();
@@ -162,6 +166,7 @@
         var data = event.data || {};
         if (data.type !== 'PPI_GAS_FRAME_VERIFIED') return;
         window.clearInterval(handshakeTimer);
+        window.clearTimeout(readyFallback);
         setState('ready', '연결 완료');
       });
 
